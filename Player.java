@@ -8,27 +8,41 @@ class Player {
 
     private static boolean boostAvailable = true;
     private static boolean boost = false;
-    private static boolean lapOneFinished = false;
+    private static boolean optimizeCoordinates = true;
     private static Coordinates bestCheckpointToBoost = null;
-    private static final Set<Coordinates> checkpoints = new LinkedHashSet<>();
+    private static final Map<Integer, Coordinates> checkpoints = new HashMap<>();
     private static final Map<Coordinates, Coordinates> optimizedCheckpointCoordinates = new HashMap<>();
     private static Coordinates nextCheckpointCoordinates;
 
     public static void main(String args[]) {
         Scanner in = new Scanner(System.in);
+        int laps = in.nextInt();
+        int checkpointCount = in.nextInt();
+        for (int i = 0; i < checkpointCount; i++) {
+            int checkpointX = in.nextInt();
+            int checkpointY = in.nextInt();
+            checkpoints.put(i, new Coordinates(checkpointX, checkpointY));
+        }
 
-        // game loop
         while (true) {
-            int x = in.nextInt();
-            int y = in.nextInt();
-            int nextCheckpointX = in.nextInt(); // x position of the next check point
-            int nextCheckpointY = in.nextInt(); // y position of the next check point
-            int nextCheckpointDist = in.nextInt(); // distance to the next checkpoint
-            int nextCheckpointAngle = in.nextInt(); // angle between your pod orientation and the direction of the next checkpoint
-            int opponentX = in.nextInt();
-            int opponentY = in.nextInt();
-
-            new ShipAnalysis().printDirection(x, y, nextCheckpointX, nextCheckpointY, nextCheckpointDist, nextCheckpointAngle, opponentX, opponentY);
+            for (int i = 0; i < 2; i++) {
+                int x = in.nextInt(); // x position of your pod
+                int y = in.nextInt(); // y position of your pod
+                int vx = in.nextInt(); // x speed of your pod
+                int vy = in.nextInt(); // y speed of your pod
+                int angle = in.nextInt(); // angle of your pod
+                int nextCheckPointId = in.nextInt(); // next check point id of your pod
+                new ShipAnalysis().printDirection(x, y, angle, nextCheckPointId);
+            }
+            for (int i = 0; i < 2; i++) {
+                int x2 = in.nextInt(); // x position of the opponent's pod
+                int y2 = in.nextInt(); // y position of the opponent's pod
+                int vx2 = in.nextInt(); // x speed of the opponent's pod
+                int vy2 = in.nextInt(); // y speed of the opponent's pod
+                int angle2 = in.nextInt(); // angle of the opponent's pod
+                int nextCheckPointId2 = in.nextInt(); // next check point id of the opponent's pod
+            }
+            // double syso ?
         }
     }
 
@@ -40,12 +54,12 @@ class Player {
         Player.boostAvailable = boostAvailable;
     }
 
-    public static boolean isLapOneFinished() {
-        return lapOneFinished;
+    public static boolean isOptimizeCoordinates() {
+        return optimizeCoordinates;
     }
 
-    public static void setLapOneFinished(boolean lapOneFinished) {
-        Player.lapOneFinished = lapOneFinished;
+    public static void setOptimizeCoordinates(boolean optimizeCoordinates) {
+        Player.optimizeCoordinates = optimizeCoordinates;
     }
 
     public static Coordinates getBestCheckpointToBoost() {
@@ -56,7 +70,7 @@ class Player {
         Player.bestCheckpointToBoost = bestCheckpointToBoost;
     }
 
-    public static Set<Coordinates> getCheckpoints() {
+    public static Map<Integer, Coordinates> getCheckpoints() {
         return checkpoints;
     }
 
@@ -83,33 +97,50 @@ class Player {
 
 class ShipAnalysis {
 
-    public void printDirection(int x, int y, int nextCheckpointX, int nextCheckpointY, int nextCheckpointDist, int nextCheckpointAngle, int opponentX, int opponentY) {
+    public void printDirection(int x, int y, int angle, int nextCheckPointId) {
+
+        Coordinates nextCheckpoint = Player.getCheckpoints().get(nextCheckPointId);
+        int nextCheckpointX = nextCheckpoint.getX();
+        int nextCheckpointY = nextCheckpoint.getY();
 
         memorizeCheckpointsAndBestBoostOpportunity(nextCheckpointX, nextCheckpointY);
 
-        Coordinates optimizedDirection = Player.getOptimizedCheckpointCoordinates().get(new Coordinates(nextCheckpointX, nextCheckpointY));
-        if (optimizedDirection != null) {
-            nextCheckpointDist = (int) Math.round(computeDist(new Coordinates(x, y), optimizedDirection));
-        }
+        Coordinates optimizedDirection = Player.getOptimizedCheckpointCoordinates().get(nextCheckpoint);
+        int nextCheckpointDist;
+        nextCheckpointDist = (int) Math.round(computeDist(new Coordinates(x, y), optimizedDirection));
 
-        int thrust = computeThrust(nextCheckpointAngle, nextCheckpointDist, x, y, opponentX, opponentY);
+        int thrust = computeThrust(angle, nextCheckpointDist, x, y);
 
-        System.err.println("Angle = " + nextCheckpointAngle);
+        System.err.println("Angle = " + angle);
         System.err.println("Distance = " + nextCheckpointDist);
 
-        if (Player.isBoostAvailable() && Player.isBoost() && Math.abs(nextCheckpointAngle) < 10) {
+        if (Player.isBoostAvailable() && Player.isBoost() ) { // todo angle a prendre en compte
             System.out.println(optimizedDirection.getX() + " " + optimizedDirection.getY() + " BOOST");
             Player.setBoostAvailable(false);
             Player.setBoost(false);
         } else {
-            int targetX = optimizedDirection != null ? optimizedDirection.getX() : nextCheckpointX;
-            int targetY = optimizedDirection != null ? optimizedDirection.getY() : nextCheckpointY;
-            Coordinates target = chooseBestTarget(x, y, targetX, targetY);
+            int targetX = optimizedDirection.getX();
+            int targetY = optimizedDirection.getY();
 
-            if (nextCheckpointDist < 600) {
+            if (nextCheckpointDist < 1000) {
+                int mapSize = Player.getCheckpoints().size();
+                for (int i = 0; i < mapSize; i++) {
+                    if ((Player.getCheckpoints().get(i)).equals(new Coordinates(nextCheckpointX, nextCheckpointY))) {
+                        int ind;
+                        if (i == mapSize - 1) {
+                            ind = 0;
+                        } else {
+                            ind = i + 1;
+                        }
 
+                        optimizedDirection = Player.getOptimizedCheckpointCoordinates().get(Player.getCheckpoints().get(ind));
+                        targetX = optimizedDirection.getX();
+                        targetY = optimizedDirection.getY();
+                        break;
+                    }
+                }
             }
-
+            Coordinates target = chooseBestTarget(x, y, targetX, targetY);
             System.out.println(target.getX() + " " + target.getY() + " " + thrust);
         }
     }
@@ -119,36 +150,34 @@ class ShipAnalysis {
         Coordinates nextCheckpointCoord = new Coordinates(nextCheckpointX, nextCheckpointY);
 
         // If nextCheckpoint changed and if the lap one is not defined as finished
-        if (!nextCheckpointCoord.equals(Player.getNextCheckpointCoordinates()) && !Player.isLapOneFinished()) {
-            Player.setNextCheckpointCoordinates(nextCheckpointCoord);
-            boolean isNewCheckpoint = Player.getCheckpoints().add(nextCheckpointCoord);
-            if (!isNewCheckpoint && !Player.isLapOneFinished()) {
-                System.err.println("Debug message - lap one finished - computing best boost opportunity");
-                optimizeCheckpointsCoordinatesToTarget();
-                Player.setLapOneFinished(true);
-                double maxDist = 0;
-                Coordinates bestCheckpointToBoost = Player.getOptimizedCheckpointCoordinates().get(nextCheckpointCoord);
-                for (int i = 0; i < Player.getCheckpoints().size(); i++) {
-                    double dist;
-                    int checkpointIndice = 0;
-                    if (i < Player.getCheckpoints().size() - 1) {
-                        checkpointIndice = i + 1;
-                    } else {
-                        checkpointIndice = 0;
-                    }
-                    dist = computeDist(Player.getOptimizedCheckpointCoordinates().get((Coordinates) Player.getCheckpoints().toArray()[i]), Player.getOptimizedCheckpointCoordinates().get((Coordinates) Player.getCheckpoints().toArray()[checkpointIndice]));
-                    if (maxDist < dist) {
-                        maxDist = dist;
-                        bestCheckpointToBoost = Player.getOptimizedCheckpointCoordinates().get((Coordinates) Player.getCheckpoints().toArray()[checkpointIndice]);
-                    }
+        Player.setNextCheckpointCoordinates(nextCheckpointCoord);
+        if (Player.isOptimizeCoordinates()) {
+            System.err.println("Debug message - lap one finished - computing best boost opportunity");
+            optimizeCheckpointsCoordinatesToTarget();
+            Player.setOptimizeCoordinates(false);
+            double maxDist = 0;
+            Coordinates bestCheckpointToBoost = Player.getOptimizedCheckpointCoordinates().get(nextCheckpointCoord);
+            for (int i = 0; i < Player.getCheckpoints().size(); i++) {
+                double dist;
+                int checkpointIndice;
+                if (i < Player.getCheckpoints().size() - 1) {
+                    checkpointIndice = i + 1;
+                } else {
+                    checkpointIndice = 0;
                 }
-                Player.setBestCheckpointToBoost(bestCheckpointToBoost);
+                dist = computeDist(Player.getOptimizedCheckpointCoordinates().get(Player.getCheckpoints().get(i)), Player.getOptimizedCheckpointCoordinates().get(Player.getCheckpoints().get(checkpointIndice)));
+                if (maxDist < dist) {
+                    maxDist = dist;
+                    bestCheckpointToBoost = Player.getOptimizedCheckpointCoordinates().get((Player.getCheckpoints().get(checkpointIndice)));
+                }
             }
+            Player.setBestCheckpointToBoost(bestCheckpointToBoost);
         }
         if (Player.isBoostAvailable() && Player.getBestCheckpointToBoost() != null && Player.getOptimizedCheckpointCoordinates().get(nextCheckpointCoord).equals(Player.getBestCheckpointToBoost())) {
             Player.setBoost(true);
         }
     }
+
 
     private void optimizeCheckpointsCoordinatesToTarget() {
         for (int i = 0; i < Player.getCheckpoints().size(); i++) {
@@ -161,8 +190,8 @@ class ShipAnalysis {
             } else {
                 checkpoint2Indice = 0;
             }
-            checkpoint1 = (Coordinates) Player.getCheckpoints().toArray()[i];
-            checkpoint2 = (Coordinates) Player.getCheckpoints().toArray()[checkpoint2Indice];
+            checkpoint1 = Player.getCheckpoints().get(i);
+            checkpoint2 = Player.getCheckpoints().get(checkpoint2Indice);
 
             Coordinates vector = new Coordinates(checkpoint2.getX() - checkpoint1.getX(), checkpoint2.getY() - checkpoint1.getY());
 
@@ -189,12 +218,12 @@ class ShipAnalysis {
         return target;
     }
 
-    public int computeThrust(int angle, int distance, int currX, int currY, int oppX, int oppY) {
-
+    public int computeThrust(int angle, int distance, int currX, int currY) {
+        /**
         angle = Math.abs(angle);
         if (angle > 90) {
             return 0;
-        }
+        }*/
         return 100;
     }
 }
