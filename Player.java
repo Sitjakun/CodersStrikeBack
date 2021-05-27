@@ -12,7 +12,6 @@ class Player {
     private static Coordinates bestCheckpointToBoost = null;
     private static final Map<Integer, Coordinates> checkpoints = new HashMap<>();
     private static final Map<Coordinates, Coordinates> optimizedCheckpointCoordinates = new HashMap<>();
-    private static Coordinates nextCheckpointCoordinates;
 
     public static void main(String args[]) {
         Scanner in = new Scanner(System.in);
@@ -24,25 +23,37 @@ class Player {
             checkpoints.put(i, new Coordinates(checkpointX, checkpointY));
         }
 
+        Map<String, Decision> podDecision = new HashMap<>();
+        Map<String, Pod> podData =  new HashMap<>();
+
         while (true) {
-            for (int i = 0; i < 2; i++) {
+            for (int i = 1; i < 3; i++) {
                 int x = in.nextInt(); // x position of your pod
                 int y = in.nextInt(); // y position of your pod
                 int vx = in.nextInt(); // x speed of your pod
                 int vy = in.nextInt(); // y speed of your pod
                 int angle = in.nextInt(); // angle of your pod
                 int nextCheckPointId = in.nextInt(); // next check point id of your pod
-                new ShipAnalysis().printDirection(x, y, angle, nextCheckPointId);
+                podDecision.put("pod" + i, new ShipAnalysis().printDirection( x, y, angle, nextCheckPointId));
+                podData.put("pod" + i, new Pod(new Coordinates(x, y), angle));
             }
-            for (int i = 0; i < 2; i++) {
+            for (int i = 1; i < 3; i++) {
                 int x2 = in.nextInt(); // x position of the opponent's pod
                 int y2 = in.nextInt(); // y position of the opponent's pod
                 int vx2 = in.nextInt(); // x speed of the opponent's pod
                 int vy2 = in.nextInt(); // y speed of the opponent's pod
                 int angle2 = in.nextInt(); // angle of the opponent's pod
                 int nextCheckPointId2 = in.nextInt(); // next check point id of the opponent's pod
+                podData.put("opp" + i, new Pod(new Coordinates(x2, y2), angle2));
             }
-            // double syso ?
+
+            Decision pod1Decision = podDecision.get("pod1");
+            Decision pod2Decision = podDecision.get("pod2");
+
+            new ShipAnalysis().handleCollisions(pod1Decision, pod2Decision, podData);
+
+            System.out.println(pod1Decision.getCoord().getX() + " " + pod1Decision.getCoord().getY() + " " + pod1Decision.getThrust());
+            System.out.println(pod2Decision.getCoord().getX() + " " + pod2Decision.getCoord().getY() + " " + pod2Decision.getThrust());
         }
     }
 
@@ -74,14 +85,6 @@ class Player {
         return checkpoints;
     }
 
-    public static Coordinates getNextCheckpointCoordinates() {
-        return nextCheckpointCoordinates;
-    }
-
-    public static void setNextCheckpointCoordinates(Coordinates checkpointCoordinates) {
-        Player.nextCheckpointCoordinates = checkpointCoordinates;
-    }
-
     public static boolean isBoost() {
         return boost;
     }
@@ -97,7 +100,7 @@ class Player {
 
 class ShipAnalysis {
 
-    public void printDirection(int x, int y, int angle, int nextCheckPointId) {
+    public Decision printDirection(int x, int y, int angle, int nextCheckPointId) {
 
         Coordinates nextCheckpoint = Player.getCheckpoints().get(nextCheckPointId);
         int nextCheckpointX = nextCheckpoint.getX();
@@ -115,9 +118,9 @@ class ShipAnalysis {
         System.err.println("Distance = " + nextCheckpointDist);
 
         if (Player.isBoostAvailable() && Player.isBoost() ) { // todo angle a prendre en compte
-            System.out.println(optimizedDirection.getX() + " " + optimizedDirection.getY() + " BOOST");
             Player.setBoostAvailable(false);
             Player.setBoost(false);
+            return new Decision(optimizedDirection, "BOOST");
         } else {
             int targetX = optimizedDirection.getX();
             int targetY = optimizedDirection.getY();
@@ -140,8 +143,7 @@ class ShipAnalysis {
                     }
                 }
             }
-            Coordinates target = chooseBestTarget(x, y, targetX, targetY);
-            System.out.println(target.getX() + " " + target.getY() + " " + thrust);
+            return new Decision(chooseBestTarget(x, y, targetX, targetY), Integer.toString(thrust));
         }
     }
 
@@ -150,7 +152,6 @@ class ShipAnalysis {
         Coordinates nextCheckpointCoord = new Coordinates(nextCheckpointX, nextCheckpointY);
 
         // If nextCheckpoint changed and if the lap one is not defined as finished
-        Player.setNextCheckpointCoordinates(nextCheckpointCoord);
         if (Player.isOptimizeCoordinates()) {
             System.err.println("Debug message - lap one finished - computing best boost opportunity");
             optimizeCheckpointsCoordinatesToTarget();
@@ -178,7 +179,6 @@ class ShipAnalysis {
         }
     }
 
-
     private void optimizeCheckpointsCoordinatesToTarget() {
         for (int i = 0; i < Player.getCheckpoints().size(); i++) {
 
@@ -203,6 +203,34 @@ class ShipAnalysis {
             Player.getOptimizedCheckpointCoordinates().put(checkpoint2, new Coordinates(checkpoint1.getX() + vector.getX(), checkpoint1.getY() + vector.getY()));
         }
         System.err.println(Player.getOptimizedCheckpointCoordinates());
+    }
+
+    public void handleCollisions(Decision pod1Decision, Decision pod2Decision, Map<String, Pod> podData) {
+        Pod pod1 = podData.get("pod1");
+        Pod pod2 = podData.get("pod2");
+        Pod opp1 = podData.get("opp1");
+        Pod opp2 = podData.get("opp2");
+
+        // friendly collisions
+        if(isCollision(pod1, pod2)) {
+            pod1Decision.setThrust("SHIELD");
+        }
+
+        // nasty collisions
+        if(isCollision(pod1, opp1) || isCollision(pod1, opp2)) {
+            pod1Decision.setThrust("SHIELD");
+        }
+        if(isCollision(pod2, opp1) || isCollision(pod2, opp2)) {
+            pod2Decision.setThrust("SHIELD");
+        }
+    }
+
+    private boolean isCollision(Pod pod1, Pod pod2) {
+        if (computeDist(pod1.getCoord(), pod2.getCoord()) <= 1000 && Math.abs(pod1.getAngle() - pod2.getAngle()) > 30) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     private double computeDist(Coordinates coord1, Coordinates coord2) {
@@ -272,5 +300,78 @@ class Coordinates {
                 "x=" + x +
                 ", y=" + y +
                 '}';
+    }
+}
+
+class Pod {
+    Coordinates coord;
+    Coordinates speed;
+    int angle;
+    int getNextCheckPointId;
+
+    public Pod() {
+    }
+
+    public Pod(Coordinates coord, int angle) {
+        this.coord = coord;
+        this.angle = angle;
+    }
+
+    public Coordinates getCoord() {
+        return coord;
+    }
+
+    public void setCoord(Coordinates coord) {
+        this.coord = coord;
+    }
+
+    public Coordinates getSpeed() {
+        return speed;
+    }
+
+    public void setSpeed(Coordinates speed) {
+        this.speed = speed;
+    }
+
+    public int getAngle() {
+        return angle;
+    }
+
+    public void setAngle(int angle) {
+        this.angle = angle;
+    }
+
+    public int getGetNextCheckPointId() {
+        return getNextCheckPointId;
+    }
+
+    public void setGetNextCheckPointId(int getNextCheckPointId) {
+        this.getNextCheckPointId = getNextCheckPointId;
+    }
+}
+
+class Decision {
+    Coordinates coord;
+    String thrust;
+
+    public Decision(Coordinates coord, String thrust) {
+        this.coord = coord;
+        this.thrust = thrust;
+    }
+
+    public Coordinates getCoord() {
+        return coord;
+    }
+
+    public void setCoord(Coordinates coord) {
+        this.coord = coord;
+    }
+
+    public String getThrust() {
+        return thrust;
+    }
+
+    public void setThrust(String thrust) {
+        this.thrust = thrust;
     }
 }
